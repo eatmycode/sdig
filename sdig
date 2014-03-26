@@ -26,6 +26,7 @@
 # HEADER
 
     DisplayHeader(){
+
         echo
         echo '                                      _ _       '
         echo '                                     | |_|      '
@@ -35,7 +36,8 @@
         echo '             |___/___/| .__/\__/_|\____|_|\__  |'" $VERSION "
         echo '                      | |                  __| |'" @eatmycode"
         echo '                      |_|                 |____/'
-        echo 
+        echo
+
     }
 
 
@@ -43,6 +45,7 @@
 # USAGE
 
     DisplayInfo(){
+
         echo
         echo "  :script:   sdig (SupaDig)"
         echo "  :author:   Terrence Harvey <dev@eatmycode.io>"
@@ -55,9 +58,11 @@
         echo "              + Explicitly displays where web traffic is directed."
         echo "              + Explicitly displays where mail traffic is directed."
         echo "              + Provides the owner of associated IP's."
+
     }
 
     DisplayUsage(){
+
         echo
         echo "   :usage:   sdig <domain.tld> [or]"
         echo "             sdig <email@domain.tld> [or]"
@@ -66,6 +71,7 @@
         echo "             sdig --help"
         echo
         echo
+
     }
 
 
@@ -132,6 +138,10 @@
             if [ "$cant_parse" == "unable to parse" ]
             then
                 echo "$(tput setaf 1)$whois_check$(tput sgr0)"|grep "Sorry, but I was unable to parse"|sed 's/^/     /'
+                echo "     Please run a regular whois check. (ie. ~$ whois $DOMAIN)$(tput sgr0)"
+            elif [ -n "$(echo "$whois_check"|grep -o "rkutilus")" ]
+            then
+                echo "$(tput setaf 1)Sorry, but I was unable to parse the WHOIS record for $ROOT_DOMAIN"|sed 's/^/     /'
                 echo "     Please run a regular whois check. (ie. ~$ whois $DOMAIN)$(tput sgr0)"
             else
                 echo "$whois_check"|sed 's/^/     /'
