@@ -1,0 +1,462 @@
+#!/bin/bash
+
+#######
+# ABOUT
+    #
+    # sdig (Supadig)
+    #
+    # :desc:     Digs up full existing DNS details on any valid domain
+    #                 + digs for entries in Google's public DNS w/ serial
+    #                 + digs for internal IMH/HUB NS & cluster A record entries w/ serial
+    #                 + a quick look at WHOIS
+    # :author:   Terrence Harvey <dev@eatmycode.io>
+    # :license:  MIT License
+    # :link:     http://github.com/eatmycode/supadig
+    # :example:  $ sdig marquelmedia.com
+    #
+
+    VERSION=1.0
+
+########
+# HEADER
+
+    DisplayHeader(){
+        echo
+        echo '                                      _ _       '
+        echo '                                     | |_|      '
+        echo '              ___ _  _ ____  ____  __| |_  ____ '
+        echo '             / __| || |  _ \/ _  \/ _  | |/ _  \'
+        echo '             \__ \ || | |_| ||_| | |_| | | |_| |'
+        echo '             |___/___/| .__/\__/_|\____|_|\__  |'" $VERSION "
+        echo '                      | |                  __| |'" @eatmycode"
+        echo '                      |_|                 |____/'
+        echo 
+    }
+
+
+#######
+# USAGE
+
+    DisplayInfo(){
+        echo
+        echo "  :script:   sdig (Supadig)"
+        echo "  :author:   Terrence Harvey <dev@eatmycode.io>"
+        echo "    :desc:   Digs up full existing DNS details on any valid domain"
+        echo "              + Digs for entries in Google's public DNS w/ serial"
+        echo "              + Digs for internal IMH/HUB NS & cluster A record entries w/ serial"
+        echo "              + A quick look at WHOIS"
+    }
+
+    DisplayUsage(){
+        echo
+        echo "   :usage:   sdig <domain.tld> [or]"
+        echo "             sdig <email@domain.tld> [or]"
+        echo "             sdig <http://hostname.tld/some/page.ext> [or]"
+        echo "             sdig --about [or]"
+        echo "             sdig --help"
+        echo
+        echo
+    }
+
+
+#########
+# GLOBALS
+
+    declare DOMAIN
+    declare ROOT_DOMAIN
+    declare ZONE
+    declare SECTION="|----------------------------------------------------------------|"
+
+
+###############
+# DOMAIN CHECKS
+    #
+    # Check if is root domain and/or if has its own zone.
+    ##### [NO NEED TO EDIT THIS]
+
+    CheckIsRootDomain(){
+
+        ROOT_DOMAIN=$(echo "$DOMAIN"|rev|cut -d\. -f1,2 -s|rev)
+        ZONE=$(dig "$DOMAIN" ns +noall +nocmd +authority|awk {'print $1'}|grep "\."|sed 's/.$//')
+        if [ -z "$ZONE" ]
+        then
+            ZONE="$DOMAIN"
+        fi
+        local dots=$(echo "$DOMAIN"|grep -o "\."|wc -l)
+        echo
+        echo -n "  $DOMAIN - "|tr "[:lower:]" "[:upper:]"
+        if [ "$dots" -eq 1 ]
+        then
+            echo -e "2nd-level! (has 1 dot)\n$SECTION"
+        elif [ "$dots" -eq 2 ]
+        then
+            echo -e "3rd-level! (has 2 dots)\n$SECTION"
+        elif [ "$dots" -gt 2 ]
+        then
+            echo -e "NOT a root domain! (has $dots dots)\n$SECTION"
+        fi
+        echo "  Root Domain: $ROOT_DOMAIN"
+        echo "         Zone: $ZONE"
+        echo
+        unset dots
+
+    }
+
+    #
+    # Pull whois registrar and nameserver info (if available/results can be parsed).
+    ##### [NO NEED TO EDIT THIS]
+
+    FetchWhois(){
+
+        local whois_check=$(curl -s http://w.rkutil.us/"$ROOT_DOMAIN"_quick|grep -v "Status\|Domain details\|Admin\|Created:\|Changed:")
+        local cant_parse=$(echo "$whois_check"|grep -o "unable to parse")
+        echo
+        echo -e "  CURRENT WHOIS\n$SECTION"
+        echo "  Registration & Nameservers Only:"
+        if [ -z "$whois_check" ]
+        then
+            echo "  $(tput setaf 1)No Records Found!$(tput sgr0)"
+        else
+
+            # :error: cannot parse returned records
+            if [ "$cant_parse" == "unable to parse" ]
+            then
+                echo "$(tput setaf 1)$whois_check$(tput sgr0)"|grep "Sorry, but I was unable to parse"|sed 's/^/     /'
+                echo "     Please run a regular whois check. (ie. ~$ whois $DOMAIN)$(tput sgr0)"
+            else
+                echo "$whois_check"|sed 's/^/     /'
+            fi
+        fi
+        echo
+        unset ROOT_DOMAIN
+        unset whois_check
+        unset cant_parse
+
+    }
+
+    #
+    # Pull any/all publicly viewable zone records.
+    ##### [NO NEED TO EDIT THIS]
+
+    FetchVisibleZoneInfo(){
+
+        local zone_records=$(dig +nocmd "$DOMAIN" any +multiline +noall +answer)
+        local records_avail=$(echo "$zone_records"|head -1)
+        echo
+        echo -e "  ZONE RECORDS (has propagated)\n$SECTION"
+        echo "  Currently Visible:"
+        if [ -z "$records_avail" ]
+        then
+
+            # :error: no records found
+            echo "     $(tput setaf 1)No Records Found!$(tput sgr0)"
+        else
+            echo "$zone_records"|sed 's/^/     /'|grep -v ";; Truncated"
+        fi
+        echo
+        unset records_avail
+        unset zone_records
+
+    }
+
+    #
+    # Pull where web traffic and mail go.
+    ##### [NO NEED TO EDIT THIS]
+
+    CheckWherePoints(){
+
+        # :task: get visible A and MX entries
+        local where_it_points=$(dig +short $DOMAIN|grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
+        local mx_records=$(dig +short mx "$DOMAIN"|sort -n|sed 's/^/MX: /')
+        local mx_entry
+        local mx_destination_ip
+        if [ -z "$mx_records" ]
+        then
+            mx_records=$(dig +short mx "$ZONE"|sort -n|sed 's/^/MX: /')
+        fi
+        unset ZONE
+        if [[ -z "$where_it_points" && -z "$mx_records" ]]
+        then
+
+            # :error: no A or MX entries found
+            echo
+            echo -e "  WHERE WEB TRAFFIC GOES\n$SECTION"
+            echo "  $(tput setaf 1)No Records Found!$(tput sgr0)"
+            echo
+            echo
+            echo -e "  WHERE MAIL TRAFFIC GOES\n$SECTION"
+            echo "  $(tput setaf 1)No Records Found!$(tput sgr0)"
+        else
+
+            # :task: get reverse lookup and serials of found MX records
+            echo
+            echo -e "  WHERE WEB TRAFFIC GOES\n$SECTION"
+            echo "  Active A Record(s):"
+            while read -r this_ip
+            do
+                local get_hostname=$(host "$this_ip"|grep "pointer"|awk {'print $5'})
+                for check_ptr in "$get_hostname"
+                do
+
+                    # :task: who owns this ip?
+                    who_owns_a=$(whois "$this_ip"|grep OrgName -m1|cut -d: -f2-|sed 's/^[ \t]*//')
+                    if [ -n "$who_owns_a" ]
+                    then
+                        owns_a="\t     \xe2\x86\xb3 $(tput setaf 2)IP Owned by: $who_owns_a$(tput sgr0)\n"
+                    fi
+                    if [ "$(echo "$check_ptr"|grep -o "\."|wc -l)" -gt 1 ]
+                    then
+                        local its_ptr=$(echo "$check_ptr"|sed 's/.$//')
+                        echo -ne "A: $this_ip [ PTR:$(tput setaf 7) $its_ptr$(tput sgr0) ]"|sed 's/^/      /';
+                        echo -e "$owns_a"
+                    else
+                        echo -ne "A: $this_ip [ $(tput setaf 1)No PTR Configured$(tput sgr0) ]"|sed 's/^/      /';
+                        echo -e "$owns_a"
+                    fi
+                    unset its_ptr
+                    unset we_own_this
+                done
+                unset get_hostname
+                unset check_ptr
+                unset this_ip
+            done << EOF 
+            $where_it_points
+EOF
+            echo
+            echo
+            echo -e "  WHERE MAIL TRAFFIC GOES\n$SECTION"
+            echo "  Active MX Record(s):"
+            if [ -z "$mx_records" ]
+            then
+
+                # :error: no records found
+                echo "     $(tput setaf 1)No Records Found!$(tput sgr0)"
+            else
+
+                # :task: get reverse dns lookup and serials of found MX records
+                local mx_hostname_ips=$(echo "$mx_records"|awk {'print $3'}|sed 's/.$//'|xargs dig +short)
+                local mx_tmp=$(date +"%y%m%d%M%N")
+                echo "$mx_records"|sed 's/.$//' > /tmp/.sdig.$mx_tmp.mxhosts
+                echo "$mx_hostname_ips" > /tmp/.sdig.$mx_tmp.mxips
+                while true
+                do
+                    read -r mx_entry <&3
+                    read -r mx_destination_ip <&4
+                    if [ -z "$mx_entry" -o -z "$mx_destination_ip" ]
+                    then
+                        break
+                    fi
+                    local this_ptr=$(host "$mx_destination_ip"|grep "pointer"|awk {'print $5'})
+
+                    # :task: who owns this ip?
+                    local who_owns_this=$(whois "$mx_destination_ip"|grep OrgName -m1|cut -d: -f2-|sed 's/^[ \t]*//')
+                    if [ -n "$who_owns_this" ]
+                    then 
+                        local owns_this="\n\t     \xe2\x86\xb3 $(tput setaf 2)IP Owned by: $who_owns_this$(tput sgr0)\n"
+                    fi
+                    if [ "$(echo "$this_ptr"|grep -o "\."|wc -l)" -gt 1 ]
+                    then
+                        local its_ptr=$(echo "$this_ptr"|sed 's/.$//')
+                        echo -ne "     $mx_entry => $mx_destination_ip [ PTR:$(tput setaf 7) $its_ptr$(tput sgr0) ]"
+                        echo -e "$owns_this"
+                    else
+                        echo -ne "     $mx_entry => $mx_destination_ip [ $(tput setaf 1)No PTR Configured$(tput sgr0) ]"
+                        echo -e "$owns_this"
+                    fi
+                done 3< /tmp/.sdig.$mx_tmp.mxhosts 4< /tmp/.sdig.$mx_tmp.mxips && rm -f /tmp/.sdig.$mx_tmp*
+                unset this_ptr
+                unset its_ptr
+                unset mx_entry
+                unset mx_destination_ip
+                unset we_own_this
+            fi
+            unset mx_records
+            unset mx_hostname_ips
+            unset mx_tmp
+        fi
+        unset where_it_points
+
+    }
+
+    #
+    # Pull level3 & google's public dns for propagated/cached entries (if exist) + serial of each.
+    ##### [NO NEED TO EDIT THIS]
+
+    CheckPublicDNS(){
+
+        echo
+        echo -e "  PUBLIC DNS (what presumably has propagated & been cached)\n$SECTION"
+        echo "  Level3's Public DNS:"
+        echo "$(FetchARecordsAndSerial a.resolvers.level3.net)"
+        echo "$(FetchARecordsAndSerial b.resolvers.level3.net)"
+        echo "$(FetchARecordsAndSerial c.resolvers.level3.net)"
+        echo
+        echo "  Google's Public DNS:"
+        echo "$(FetchARecordsAndSerial google-public-dns-a.google.com)"
+        echo "$(FetchARecordsAndSerial google-public-dns-b.google.com)"
+
+    }
+
+    #
+    # Pull all A record entries from the given DNS server.
+    ##### [NO NEED TO EDIT THIS]
+
+    FetchARecordsAndSerial(){
+
+        local server="$1"
+        local a_records=$(dig +short $DOMAIN @$server|grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
+        if [ -z "$a_records" ]
+        then
+
+            # :error: none found
+            if [ "$(echo "$server"|grep -o "\."|wc -l)" -gt 2 ]
+            then
+                echo -e "@$(echo "$server"|cut -d\. -f1,2): $(tput setaf 1)No Records Found!$(tput sgr0)\n"|sed 's/^/     /'
+            else
+                echo -e "@$(echo "$server"|cut -d\. -f1): $(tput setaf 1)No Records Found!$(tput sgr0)\n"|sed 's/^/     /'
+            fi
+        elif [ "$(echo "$a_records"|grep -o 'timed out')" == "timed out" ]
+        then
+            if [ "$(echo "$server"|grep -o "\."|wc -l)" -gt 2 ]
+            then
+                echo -e "@$(echo "$server"|cut -d\. -f1,2): $(tput setaf 1)Connection Timed Out!$(tput sgr0)\n"|sed 's/^/     /'
+            else
+                echo -e "@$(echo "$server"|cut -d\. -f1): $(tput setaf 1)Connection Timed Out!$(tput sgr0)\n"|sed 's/^/     /'
+            fi
+        else
+
+            # :task: get ptr and serials of found A records
+            while read -r a_record
+            do
+                local this_ptr=$(host "$a_record"|grep "pointer"|awk {'print $5'})
+                local this_serial=$(dig "$DOMAIN" @"$server" +nocmd any +multiline +noall +answer|grep -h serial|awk {'print $1'})
+                if [ "$(echo "$this_serial"|wc -m)" -lt 10 ]
+                then
+
+                    # :error: serial cannot be found?
+                    this_serial="$(tput setaf 1)The serial cannot be determined.$(tput sgr0)"
+                else
+                    this_serial="$(tput setaf 3)Serial: $this_serial$(tput sgr0)"
+                fi
+                if [ "$(echo "$this_ptr"|grep -o "\."|wc -l)" -gt 1 ]
+                then
+                    if [ "$(echo "$server"|grep -o "\."|wc -l)" -gt 2 ]
+                    then
+                        echo -e "@$(echo "$server"|cut -d\. -f1,2): $a_record [ PTR:$(tput setaf 7) $(echo "$this_ptr"|sed 's/.$//')$(tput sgr0) ] \n\t     \xe2\x86\xb3 $this_serial\n"|sed 's/^/     /'
+                    else
+                        echo -e "@$(echo "$server"|cut -d\. -f1): $a_record [ PTR:$(tput setaf 7) $(echo "$this_ptr"|sed 's/.$//')$(tput sgr0) ] \n\t     \xe2\x86\xb3 $this_serial\n"|sed 's/^/     /'
+                    fi
+                else
+                    if [ "$(echo "$server"|grep -o "\."|wc -l)" -gt 2 ]
+                    then
+                        echo -e "@$(echo "$server"|cut -d\. -f1,2): $a_record [ $(tput setaf 1)No PTR Configured$(tput sgr0) ] \n\t     \xe2\x86\xb3 $this_serial\n"|sed 's/^/     /'
+                    else
+                        echo -e "@$(echo "$server"|cut -d\. -f1): $a_record [ $(tput setaf 1)No PTR Configured$(tput sgr0) ] \n\t     \xe2\x86\xb3 $this_serial\n"|sed 's/^/     /'
+                    fi
+                fi
+                unset this_serial
+                unset this_ptr
+                unset a_record
+            done << EOF
+            $a_records
+EOF
+            unset a_records
+        fi
+
+    }
+
+    #
+    # Now, dig it all up.
+    ##### [NO NEED TO EDIT THIS]
+
+    Supadig(){
+
+        echo
+        DisplayHeader
+        echo
+        CheckIsRootDomain
+        echo
+        FetchWhois
+        echo
+        FetchVisibleZoneInfo
+        echo
+        CheckPublicDNS
+        echo
+        CheckWherePoints
+        echo
+        unset DOMAIN
+        unset SECTION
+
+    }
+
+
+####################
+# REQUIREMENTS CHECK
+    #
+    # Check for false input and display help if true.
+    # [else]
+    # If input seems valid, has an actual valid domain/tld been given?
+    ##### [NO NEED TO EDIT THIS]
+
+    if [[ -z "$1" || "$1" == "--help" ]]
+    then
+        DisplayHeader
+        DisplayUsage
+        exit 0
+    elif [ "$1" == "--about" ]
+    then
+        DisplayHeader
+        DisplayInfo
+        DisplayUsage
+        exit 0
+    else
+        if [[ -n "$2" || "$(echo "$*"|grep -o "\."|wc -l)" == 0 || -z "$(echo "$*"|cut -d\. -f1)" ]]
+        then
+
+            # :error: entry appears invalid
+            DisplayHeader
+            echo -e "$(tput setaf 1)\n   ERROR!$(tput sgr0) \"$*\" is an invalid entry!"
+            DisplayUsage
+            exit 1
+        else
+            validated=$(echo "$*"|sed 's/http:\/\///;s/https:\/\///;s/ftp:\/\///;s/ftpes:\/\///'|cut -d@ -f2-|cut -d\/ -f1)
+            confirm_tld=$(echo "$validated"|rev|cut -d\. -f1 -s|rev)
+            declare -a valid_tlds=("ac" "ad" "ae" "aero" "af" "ag" "ai" "al" "am" "an" "ao" "aq" "ar" "arpa" "as" "asia" "at" "au" "aw" "ax" 
+                "az" "ba" "bb" "bd" "be" "bf" "bg" "bh" "bi" "biz" "bj" "bl" "bm" "bn" "bo" "br" "bs" "bt" "bv" "bw" "by" "bz" "ca" "cat" "cc" 
+                "cd" "cf" "cg" "ch" "ci" "ck" "cl" "cm" "cn" "co" "com" "coop" "cr" "cu" "cv" "cx" "cy" "cz" "de" "dj" "dk" "dm" "do" "dz" "ec" 
+                "edu" "ee" "eg" "eh" "er" "es" "et" "eu" "fi" "fj" "fk" "fm" "fo" "fr" "ga" "gb" "gd" "ge" "gf" "gg" "gh" "gi" "gl" "gm" "gn" "gov" 
+                "gp" "gq" "gr" "gs" "gt" "gu" "gw" "gy" "hk" "hm" "hn" "hr" "ht" "hu" "id" "ie" "il" "im" "in" "info" "int" "io" "iq" "ir" "is" "it" 
+                "je" "jm" "jo" "jobs" "jp" "ke" "kg" "kh" "ki" "km" "kn" "kp" "kr" "kw" "ky" "kz" "la" "lb" "lc" "li" "lk" "lr" "ls" "lt" "lu" "lv" 
+                "ly" "ma" "mc" "md" "me" "mf" "mg" "mh" "mil" "mk" "ml" "mm" "mn" "mo" "mobi" "mp" "mq" "mr" "ms" "mt" "mu" "museum" "mv" "mw" "mx" 
+                "my" "mz" "na" "name" "nc" "ne" "net" "nf" "ng" "ni" "nl" "no" "np" "nr" "nu" "nz" "om" "org" "pa" "pe" "pf" "pg" "ph" "pk" "pl" "pm"
+                "pn" "pr" "pro" "ps" "pt" "pw" "py" "qa" "re" "ro" "rs" "ru" "rw" "sa" "sb" "sc" "sd" "se" "sg" "sh" "si" "sj" "sk" "sl" "sm" "sn" 
+                "so" "sr" "st" "su" "sv" "sy" "sz" "tc" "td" "tel" "tf" "tg" "th" "tj" "tk" "tl" "tm" "tn" "to" "tp" "tr" "travel" "tt" "tv" "tw" 
+                "tz" "ua" "ug" "uk" "um" "us" "uy" "uz" "va" "vc" "ve" "vg" "vi" "vn" "vu" "wf" "ws" "ye" "yt" "yu" "za" "zm" "zw")
+
+            # :task: validate given domain entry
+            for valid_tld in "${valid_tlds[@]}"
+            do
+                if [ "$confirm_tld" == "$valid_tld" ]
+                then
+                    DOMAIN=$(echo "$validated")
+                    unset valid_tld
+                    unset valid_tlds
+                    unset confirm_tld
+                    unset validated
+
+                    # :init: run script
+                    Supadig
+                    exit 0
+                fi
+            done
+
+            # :error: domain appears invalid
+            DisplayHeader
+            echo -e "\n   $(tput setaf 1)ERROR!$(tput sgr0) \"$*\" is an invalid domain!"
+            DisplayUsage
+            exit 1
+         fi
+    fi
+
+# EOF
+#####
