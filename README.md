@@ -6,7 +6,7 @@ Simply Put... The `dig` Utility On Steroids.
 A wrapper for the dig command-line tool that Digs up full existing DNS details on any valid domain:
 
    + Checks if root domain and/or provides the root domain.
-   + Provides as quick look at WHOIS: [Registrar, Nameservers + IPS, Expiration] (if available).
+   + Provides as quick look at WHOIS: (Registrar, Nameservers + IPS, Expiration ... if available).
    + Digs for propagated and visible zone records.
    + Digs for propagated and cached entries in Level 3's & Google's public DNS
    + Digs for SOA serials for comparison.
@@ -29,12 +29,11 @@ jwhois package
 
 ---
 
-Why dnsutils?
+**Why dnsutils?**
 
 The dnsutils package contains dig (domain information groper), which is a flexible tool for interrogating DNS name servers. It performs DNS lookups and displays the answers that are returned from the name server(s) that were queried. Most DNS administrators use dig to troubleshoot DNS problems because of its flexibility, ease of use and clarity of output. Other lookup tools tend to have less functionality than dig.
 
-
-Why jwhois?
+**Why jwhois?**
 
 jwhois is an Internet Whois client that queries hosts for information about a domain according to RFC 954 - NICNAME/WHOIS. 
 
