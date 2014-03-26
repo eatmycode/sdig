@@ -3,16 +3,21 @@
 #######
 # ABOUT
     #
-    # sdig (Supadig)
+    # sdig (SupaDig)
     #
-    # :desc:     Digs up full existing DNS details on any valid domain
-    #                 + digs for entries in Google's public DNS w/ serial
-    #                 + digs for internal IMH/HUB NS & cluster A record entries w/ serial
-    #                 + a quick look at WHOIS
+    # :desc:     Digs up full existing DNS details on any valid domain:
+    #             + Checks if root domain and/or provides the root domain.
+    #             + Provides as quick look at WHOIS: [Registrar, Nameservers + IPS, Expiration] (if available).
+    #             + Digs for propagated and visible zone records.
+    #             + Digs for propagated and cached entries in Level 3's & Google's public DNS w/ serials.
+    #             + Digs for the respective PTR's on associated IP's.
+    #             + Explicitly displays where web traffic is directed.
+    #             + Explicitly displays where mail traffic is directed.
+    #             + Provides the owner of associated IP's.
     # :author:   Terrence Harvey <dev@eatmycode.io>
     # :license:  MIT License
     # :link:     http://github.com/eatmycode/supadig
-    # :example:  $ sdig marquelmedia.com
+    # :example:  $ sdig eatmycode.pro
     #
 
     VERSION=1.0
@@ -39,12 +44,17 @@
 
     DisplayInfo(){
         echo
-        echo "  :script:   sdig (Supadig)"
+        echo "  :script:   sdig (SupaDig)"
         echo "  :author:   Terrence Harvey <dev@eatmycode.io>"
-        echo "    :desc:   Digs up full existing DNS details on any valid domain"
-        echo "              + Digs for entries in Google's public DNS w/ serial"
-        echo "              + Digs for internal IMH/HUB NS & cluster A record entries w/ serial"
-        echo "              + A quick look at WHOIS"
+        echo "    :desc:   Digs up full existing DNS details on any valid domain:"
+        echo "              + Checks if root domain and/or provides the root domain."
+        echo "              + Provides as quick look at WHOIS: [Registrar, Nameservers + IPS, Expiration] (if available)."
+        echo "              + Digs for propagated and visible zone records."
+        echo "              + Digs for propagated and cached entries in Level 3's & Google's public DNS w/ serials."
+        echo "              + Digs for the respective PTR's on associated IP's."
+        echo "              + Explicitly displays where web traffic is directed."
+        echo "              + Explicitly displays where mail traffic is directed."
+        echo "              + Provides the owner of associated IP's."
     }
 
     DisplayUsage(){
