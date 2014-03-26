@@ -74,6 +74,8 @@ Just drop `sdig` in your scripts, bin, or executable dir:
 
 ## How To `sdig`
 
+1) via CLI:
+
 
 	~$ sdig
 
@@ -189,6 +191,8 @@ Just drop `sdig` in your scripts, bin, or executable dir:
 	  Active MX Record(s):
 	     MX: 0 mail.marquelmedia.net => 198.199.82.196 [ PTR: mail.marquelmedia.net ]
 		     - IP Owned by: Digital Ocean, Inc.
+
+2) via WEB: [supadig.com](http://supadig.com/)
 
 ## Limitations
 
